@@ -64,6 +64,46 @@ int parse_arguments(int argc, char *argv[], int *peerport, char **dsip, int *dsp
     return 1;
 }
 
+int communicate(int sockfd, struct sockaddr_in *server_addr, const char *msg, char *response, size_t resp_len) {
+    socklen_t addr_len = sizeof(*server_addr);
+
+    if(sendto(sockfd, msg, strlen(msg), 0, (struct sockaddr*)server_addr, addr_len) < 0){
+        perror("sendto");
+        return -1;
+    }
+
+    ssize_t bytes_recvd = recvfrom(sockfd, response, resp_len - 1, 0, (struct sockaddr *)server_addr, &addr_len);
+
+    if(bytes_recvd < 0) {
+        printf("Communication failure.\n");
+        return -1;
+    }
+    response[bytes_recvd] = '\0';
+    return 0;
+}
+
+void login(int sockfd, struct sockaddr_in *server_addr, const char *uid, const char *password, const char *tcpPort){
+    char message[128];
+    char response[256];
+
+    snprintf(message, sizeof(message), "LIN %s %s %s\n", uid, password, tcpPort);
+
+    if(communicate(sockfd, server_addr, message, response, sizeof(response)) == 0){
+        char status[10];
+        if(sscanf(response, "RLI %s", status) == 1){ 
+
+            if(strcmp(status, "OK") == 0){
+                printf("Login successful.\n");
+            } else if(strcmp(status, "NOK") == 0){
+                printf("Login failed: Incorrect password.\n");
+            } else if(strcmp(status, "REG") == 0){
+                printf("User successfuly registered and logged in.\n");
+            } else{
+                printf("Login format error.\n");
+            }
+        }
+    }
+}
 
 
 
@@ -121,20 +161,17 @@ int main(int argc, char *argv[]) {
         char command[20];
         char uid[20];
         char password[20];
+        char tcpPort[20];
 
-        int fields = sscanf(buffer, "%19s %19s %19s",
-                             command, uid, password);
+        int fields = sscanf(buffer, "%19s %19s %19s %19s",
+                             command, uid, password, tcpPort);
 
         if(strcmp(command, "login") == 0){
-            login(uid, password);
-        }
-        
-        if (fields >= 2) {
-            printf("UID: %s\n", uid);
-        }
-
-        if (fields >= 3) {
-            printf("Password: %s\n", password);
+            if(fields == 4){
+                login(sockfd, &server_addr, uid, password, tcpPort);
+            } else{
+                printf("Usage: login <UID> <Password> <peerTCPport>\n");
+            }
         }
     }
 
