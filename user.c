@@ -12,7 +12,12 @@
 #define DEFAULT_DSIP "193.136.138.142"
 #define DEFAULT_DSPORT 59000
 
-
+typedef enum {
+    CMD_OK,          // sucesso confirmado pelo DS
+    CMD_NO_SESSION,  // DS confirma que não há sessão ativa
+    CMD_REJECTED,    // pedido recusado por outro motivo (WRP, ERR, resposta inesperada)
+    CMD_COMM_ERROR   // falha de comunicação (timeout, sendto/recvfrom)
+} cmd_result_t;
 
 
 int parse_arguments(int argc, char *argv[],
@@ -62,14 +67,8 @@ int parse_arguments(int argc, char *argv[],
         return 0;
     }
 
-    printf("peerport = %d\n", *peerport);
-    printf("DSIP     = %s\n", *dsip);
-    printf("DSport   = %d\n", *dsport);
-
     return 1;
 }
-
-
 
 
 int communicate(int sockfd,
@@ -114,9 +113,7 @@ int communicate(int sockfd,
 }
 
 
-
-
-int login(int sockfd,
+cmd_result_t login(int sockfd,
           struct sockaddr_in *server_addr,
           const char *uid,
           const char *password,
@@ -131,45 +128,37 @@ int login(int sockfd,
             password,
             peerport);
 
-    if (communicate(sockfd,
-                    server_addr,
-                    message,
-                    response,
-                    sizeof(response)) == 0)
-    {
-        char status[10];
+    if (communicate(sockfd, server_addr, message, response, sizeof(response)) == -1)
+        return CMD_COMM_ERROR;
 
-        if (sscanf(response, "RLI %9s", status) == 1) {
-
-            if (strcmp(status, "OK") == 0) {
-                printf("Successful login.\n");
-                return 1;
-
-            } else if (strcmp(status, "NOK") == 0) {
-                printf("Incorrect login attempt.\n");
-                return 0;
-
-            } else if (strcmp(status, "REG") == 0) {
-                printf("New user registered.\n");
-                return 1;
-
-            } else if (strcmp(status, "ERR") == 0) {
-                printf("Login request error.\n");
-                return 0;
-
-            } else {
-                printf("Unexpected login response.\n");
-                return 0;
-            }
-        }
+    char status[10];
+    if (sscanf(response, "RLI %9s", status) != 1) {
+        printf("Unexpected message received from DS.\n");
+        return CMD_REJECTED;
     }
 
+    if (strcmp(status, "OK") == 0) {
+        printf("Successful login.\n");
+        return CMD_OK;
+    } else if (strcmp(status, "REG") == 0) {
+        printf("New user registered.\n");
+        return CMD_OK;
+    } else if (strcmp(status, "NOK") == 0) {
+        printf("Incorrect login attempt.\n");
+        return CMD_REJECTED;
+    } else if (strcmp(status, "ERR") == 0) {
+        printf("Login request error.\n");
+        return CMD_REJECTED;
+    } else {
+        printf("Unexpected login response.\n");
+        return CMD_REJECTED;
+    }
     return 0;
 }
 
 
 
-int logout(int sockfd,
+cmd_result_t logout(int sockfd,
            struct sockaddr_in *server_addr,
            const char *uid,
            const char *password)
@@ -182,44 +171,46 @@ int logout(int sockfd,
             uid,
             password);
 
-    if (communicate(sockfd,
-                    server_addr,
-                    message,
-                    response,
-                    sizeof(response)) == 0)
-    {
-        char status[10];
+    if (communicate(sockfd, server_addr, message, response, sizeof(response)) == -1)
+        return CMD_COMM_ERROR;
 
-        if (sscanf(response, "RLO %9s", status) == 1) {
+    char status[10];
 
-            if (strcmp(status, "OK") == 0) {
-                printf("Successful logout.\n");
-                return 1;
-
-            } else if (strcmp(status, "NLG") == 0) {
-                printf("User not logged in.\n");
-
-            } else if (strcmp(status, "UNR") == 0) {
-                printf("Unknown user.\n");
-
-            } else if (strcmp(status, "WRP") == 0) {
-                printf("Wrong password.\n");
-
-            } else if (strcmp(status, "ERR") == 0) {
-                printf("Logout request error.\n");
-
-            } else {
-                printf("Unexpected logout response.\n");
-            }
-        }
+    if (sscanf(response, "RLO %9s", status) != 1) {
+        printf("Unexpected message received from DS.\n");
+        return CMD_REJECTED;
     }
 
+    if (strcmp(status, "OK") == 0) {
+        printf("Successful logout.\n");
+        return CMD_OK;
+
+    } else if (strcmp(status, "NLG") == 0) {
+        printf("User not logged in.\n");
+        return CMD_NO_SESSION;
+
+    } else if (strcmp(status, "UNR") == 0) {
+        printf("Unknown user.\n");
+        return CMD_NO_SESSION;
+
+    } else if (strcmp(status, "WRP") == 0) {
+        printf("Wrong password.\n");
+        return CMD_REJECTED;
+
+    } else if (strcmp(status, "ERR") == 0) {
+        printf("Logout request error.\n");
+        return CMD_REJECTED;
+
+    } else {
+        printf("Unexpected logout response.\n");
+        return CMD_REJECTED;
+    }
     return 0;
 }
 
 
 
-int unregister_user(int sockfd,
+cmd_result_t unregister_user(int sockfd,
                     struct sockaddr_in *server_addr,
                     const char *uid,
                     const char *password)
@@ -232,41 +223,33 @@ int unregister_user(int sockfd,
             uid,
             password);
 
-    if (communicate(sockfd,
-                    server_addr,
-                    message,
-                    response,
-                    sizeof(response)) == 0)
-    {
-        char status[10];
-
-        if (sscanf(response, "RUR %9s", status) == 1) {
-
-            if (strcmp(status, "OK") == 0) {
-                printf("Successful unregister.\n");
-                return 1;
-
-            } else if (strcmp(status, "NOK") == 0) {
-                printf("User not logged in.\n");
-
-            } else if (strcmp(status, "UNR") == 0) {
-                printf("Unknown user.\n");
-
-            } else if (strcmp(status, "WRP") == 0) {
-                printf("Wrong password.\n");
-
-            } else if (strcmp(status, "ERR") == 0) {
-                printf("Unregister request error.\n");
-
-            } else {
-                printf("Unexpected unregister response.\n");
-            }
-        }
+    char status[10];
+    if (sscanf(response, "RUR %9s", status) != 1) {
+        printf("Unexpected message received from DS.\n");
+        return CMD_REJECTED;
     }
 
+    if (strcmp(status, "OK") == 0) {
+        printf("Successful unregister.\n");
+        return CMD_OK;
+    } else if (strcmp(status, "NOK") == 0) {
+        printf("User not logged in.\n");
+        return CMD_NO_SESSION;
+    } else if (strcmp(status, "UNR") == 0) {
+        printf("Unknown user.\n");
+        return CMD_NO_SESSION;
+    } else if (strcmp(status, "WRP") == 0) {
+        printf("Wrong password.\n");
+        return CMD_REJECTED;
+    } else if (strcmp(status, "ERR") == 0) {
+        printf("Unregister request error.\n");
+        return CMD_REJECTED;
+    } else {
+        printf("Unexpected unregister response.\n");
+        return CMD_REJECTED;
+    }
     return 0;
 }
-
 
 
 int validar_UID(const char *UID)
@@ -303,7 +286,6 @@ int validar_Password(const char *Password)
 }
 
 
-
 int validar_Port(int Port)
 {
     if (Port >= 1 && Port <= 65535) {
@@ -312,7 +294,6 @@ int validar_Port(int Port)
 
     return 0;
 }
-
 
 
 int main(int argc, char *argv[])
@@ -333,15 +314,13 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-
     if (!validar_Port(peerport)) {
-        printf("Erro: peerport inválida.\n");
+        printf("Error: Invalid peerport.\n");
         return 1;
     }
 
-
     if (!validar_Port(dsport)) {
-        printf("Erro: DSport inválida.\n");
+        printf("Error: Invalid DSport.\n");
         return 1;
     }
 
@@ -354,9 +333,6 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    printf("Socket UDP criado com sucesso.\n");
-
-
     struct sockaddr_in server_addr;
 
     memset(&server_addr, 0, sizeof(server_addr));
@@ -365,20 +341,16 @@ int main(int argc, char *argv[])
 
     server_addr.sin_port = htons(dsport);
 
-
     if (inet_pton(AF_INET,
                   dsip,
                   &server_addr.sin_addr) <= 0)
     {
-        printf("Erro: endereço IP inválido.\n");
+        printf("Error: Invalid IP adress.\n");
 
         close(sockfd);
 
         return 1;
     }
-
-    printf("Endereço do DS configurado com sucesso.\n");
-
 
     int logged_in = 0;
 
@@ -389,20 +361,16 @@ int main(int argc, char *argv[])
     while (1) {
 
         printf("> ");
-
         if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
             break;
         }
 
-
         /* Remover '\n' */
         buffer[strcspn(buffer, "\n")] = '\0';
-
 
         if (strlen(buffer) == 0) {
             continue;
         }
-
 
         if (strcmp(buffer, "exit") == 0) {
 
@@ -418,7 +386,6 @@ int main(int argc, char *argv[])
             continue;
         }
 
-
         int fields;
 
         char command[20];
@@ -431,7 +398,6 @@ int main(int argc, char *argv[])
         password[0] = '\0';
         extra[0] = '\0';
 
-
         fields = sscanf(buffer,
                         "%19s %19s %19s %19s",
                         command,
@@ -439,11 +405,7 @@ int main(int argc, char *argv[])
                         password,
                         extra);
 
-
-
-
         if (strcmp(command, "login") == 0) {
-
 
             if (fields != 3) {
 
@@ -452,9 +414,14 @@ int main(int argc, char *argv[])
                 continue;
             }
 
+            if(logged_in){
+
+                printf("Logout before another login.\n");
+
+                continue;
+            }
 
             /* Validar UID */
-
             if (!validar_UID(uid)) {
 
                 printf("Invalid UID.\n");
@@ -462,9 +429,7 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-
             /* Validar password */
-
             if (!validar_Password(password)) {
 
                 printf("Invalid password.\n");
@@ -472,24 +437,18 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-
             /* Enviar login para o DS */
+            cmd_result_t result = login(sockfd, &server_addr, uid, password, peerport);
 
-            if (login(sockfd,
-                      &server_addr,
-                      uid,
-                      password,
-                      peerport))
-            {
-
+            if (result == CMD_OK) {
                 logged_in = 1;
-
                 strcpy(current_uid, uid);
-
                 strcpy(current_password, password);
+
+            } else if (result == CMD_COMM_ERROR) {
+                printf("Communication error during login.\n");
             }
         }
-
 
         else if (strcmp(command, "logout") == 0) {
 
@@ -500,19 +459,21 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-
             if (logged_in) {
-
-                if (logout(sockfd,
+                cmd_result_t result = logout(sockfd,
                            &server_addr,
                            current_uid,
-                           current_password))
-                {
+                           current_password);
+
+                if (result == CMD_OK || result == CMD_NO_SESSION){
                     logged_in = 0;
 
                     current_uid[0] = '\0';
 
                     current_password[0] = '\0';
+
+                } else if(result == CMD_COMM_ERROR){
+                    printf("Communication error during logout.\n");
                 }
 
             } else {
@@ -520,7 +481,6 @@ int main(int argc, char *argv[])
                 printf("User not logged in.\n");
             }
         }
-
 
         else if (strcmp(command, "unregister") == 0) {
 
@@ -531,19 +491,19 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-
             if (logged_in) {
-
-                if (unregister_user(sockfd,
+                int result = unregister_user(sockfd,
                                     &server_addr,
                                     current_uid,
-                                    current_password))
-                {
+                                    current_password);
+
+                if (result == CMD_OK || result == CMD_NO_SESSION) {
                     logged_in = 0;
-
                     current_uid[0] = '\0';
-
                     current_password[0] = '\0';
+                    
+                } else if (result == CMD_COMM_ERROR) {
+                    printf("Communication error during unregister.\n");
                 }
 
             } else {
@@ -552,13 +512,11 @@ int main(int argc, char *argv[])
             }
         }
 
-
         else {
 
             printf("Unknown command.\n");
         }
     }
-
     close(sockfd);
 
     return 0;
