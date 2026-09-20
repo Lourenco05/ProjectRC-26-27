@@ -1,10 +1,19 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -pedantic
+CFLAGS = -Wall -Wextra -std=c11
 
-all: user
+TARGET = user
+SRCS = user.c args.c validation.c ds_protocol.c
+OBJS = $(SRCS:.c=.o)
 
-user: user.c
-	$(CC) $(CFLAGS) user.c -o user
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+	$(CC) $(CFLAGS) -o $(TARGET) $(OBJS)
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f user
+	rm -f $(OBJS) $(TARGET)
+
+.PHONY: all clean
