@@ -41,8 +41,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    /* Timeout no recvfrom, para não bloquear indefinidamente se o DS
-     * não responder (perda de datagrama, servidor em baixo, etc.). */
+    /* Timeout no recvfrom, para não bloquear se o DS não responder */
     struct timeval tv;
     tv.tv_sec = 3;
     tv.tv_usec = 0;
