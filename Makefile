@@ -1,8 +1,8 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c11
+CFLAGS = -Wall -Wextra -std=gnu99
 
 TARGET = user
-SRCS = user.c args.c validation.c ds_protocol.c
+SRCS = signals.c user.c args.c validation.c ds_protocol.c
 OBJS = $(SRCS:.c=.o)
 
 all: $(TARGET)

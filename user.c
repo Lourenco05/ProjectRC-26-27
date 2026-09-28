@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>                      /* SIGNALS: novo */
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -13,6 +14,7 @@
 #include "args.h"
 #include "validation.h"
 #include "ds_protocol.h"
+#include "signals.h"                    /* SIGNALS: novo */
 
 int main(int argc, char *argv[])
 {
@@ -33,6 +35,8 @@ int main(int argc, char *argv[])
         printf("Error: Invalid DSport.\n");
         return 1;
     }
+
+    setup_signals();                    
 
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
 
@@ -68,10 +72,20 @@ int main(int argc, char *argv[])
     char current_password[20] = "";
     char buffer[INPUT_BUF_SIZE];
 
-    while (1) {
+    while (!sigint_received()) {               /* SIGNALS: alterado (era while (1)) */
 
         printf("> ");
+        fflush(stdout);                 /* SIGNALS: novo */
+
         if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
+            /* SIGNALS: novo — distinguir Ctrl-C, EINTR e EOF */
+            if (sigint_received()) {
+                break;
+            }
+            if (errno == EINTR) {
+                clearerr(stdin);
+                continue;
+            }
             break;
         }
 
@@ -124,19 +138,16 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-            /* Validar UID */
             if (!validar_UID(uid)) {
                 printf("Invalid UID.\n");
                 continue;
             }
 
-            /* Validar password */
             if (!validar_Password(password)) {
                 printf("Invalid password.\n");
                 continue;
             }
 
-            /* Enviar login para o DS */
             cmd_result_t result = login(sockfd, &server_addr, uid, password, peerport);
 
             if (result == CMD_OK) {
@@ -206,6 +217,15 @@ int main(int argc, char *argv[])
         else {
             printf("Unknown command.\n");
         }
+    }
+
+    if (sigint_received()) {
+        printf("\n");
+    }
+
+    if (logged_in) {
+        ignore_sigint();
+        logout(sockfd, &server_addr, current_uid, current_password);
     }
 
     close(sockfd);
