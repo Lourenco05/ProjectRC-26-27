@@ -14,4 +14,13 @@
 #define RESPONSE_BUF_SIZE 256
 #define INPUT_BUF_SIZE    256
 
+#define FILENAME_MAX_LEN  24            
+#define FILENAME_EXT_LEN  3             
+#define LABEL_MAX_LEN     20           
+#define MAX_FSIZE         10000000LL
+#define MAX_LIST_ENTRIES  50            /* máximo de filenames numa RLS */
+#define LIST_RESP_SIZE    2048          /* Buffer para a resposta RLS ao comando list. */
+#define LIST_TOKEN_SIZE   32            /* Tamanho do buffer de cada filename lido da resposta RLS */
+#define TOKEN_SIZE        64            /* Tamanho dos tokens lidos do teclado em user.c. */
+
 #endif /* COMMON_H */

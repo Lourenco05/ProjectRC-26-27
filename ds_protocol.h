@@ -38,4 +38,24 @@ cmd_result_t unregister_user(int sockfd,
                               const char *uid,
                               const char *password);
 
+/* Verifica localmente que o ficheiro existe, envia um pedido PUB ao DS
+ * e interpreta a resposta RPB. */
+cmd_result_t publish_file(int sockfd,
+                           struct sockaddr_in *server_addr,
+                           const char *uid,
+                           const char *password,
+                           const char *filename,
+                           const char *label);
+
+/* Envia um pedido REM ao DS e interpreta a resposta RRM */
+cmd_result_t remove_file(int sockfd,
+                          struct sockaddr_in *server_addr,
+                          const char *uid,
+                          const char *password,
+                          const char *filename);
+
+/* Envia um pedido LST ao DS, interpreta a resposta RLS e mostra a lista. */
+cmd_result_t list_files(int sockfd,
+                         struct sockaddr_in *server_addr);
+
 #endif /* DS_PROTOCOL_H */

@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>                      /* SIGNALS: novo */
+#include <errno.h>                      
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -14,7 +14,7 @@
 #include "args.h"
 #include "validation.h"
 #include "ds_protocol.h"
-#include "signals.h"                    /* SIGNALS: novo */
+#include "signals.h"                    
 
 int main(int argc, char *argv[])
 {
@@ -72,13 +72,12 @@ int main(int argc, char *argv[])
     char current_password[20] = "";
     char buffer[INPUT_BUF_SIZE];
 
-    while (!sigint_received()) {               /* SIGNALS: alterado (era while (1)) */
+    while (!sigint_received()) {               
 
         printf("> ");
-        fflush(stdout);                 /* SIGNALS: novo */
+        fflush(stdout);
 
         if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
-            /* SIGNALS: novo — distinguir Ctrl-C, EINTR e EOF */
             if (sigint_received()) {
                 break;
             }
@@ -109,21 +108,21 @@ int main(int argc, char *argv[])
 
         int fields;
 
-        char command[20];
-        char uid[20];
-        char password[20];
-        char extra[20];
+        char command[TOKEN_SIZE];
+        char arg1[TOKEN_SIZE];      /* UID  | filename */
+        char arg2[TOKEN_SIZE];      /* password | label */
+        char extra[TOKEN_SIZE];
 
         command[0] = '\0';
-        uid[0] = '\0';
-        password[0] = '\0';
+        arg1[0] = '\0';
+        arg2[0] = '\0';
         extra[0] = '\0';
 
         fields = sscanf(buffer,
-                        "%19s %19s %19s %19s",
+                        "%63s %63s %63s %63s",
                         command,
-                        uid,
-                        password,
+                        arg1,
+                        arg2,
                         extra);
 
         if (strcmp(command, "login") == 0) {
@@ -138,22 +137,22 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-            if (!validar_UID(uid)) {
+            if (!validar_UID(arg1)) {
                 printf("Invalid UID.\n");
                 continue;
             }
 
-            if (!validar_Password(password)) {
+            if (!validar_Password(arg2)) {
                 printf("Invalid password.\n");
                 continue;
             }
 
-            cmd_result_t result = login(sockfd, &server_addr, uid, password, peerport);
+            cmd_result_t result = login(sockfd, &server_addr, arg1, arg2, peerport);
 
             if (result == CMD_OK) {
                 logged_in = 1;
-                strcpy(current_uid, uid);
-                strcpy(current_password, password);
+                strcpy(current_uid, arg1);
+                strcpy(current_password, arg2);
 
             } else if (result == CMD_COMM_ERROR) {
                 printf("Communication error during login.\n");
@@ -211,6 +210,93 @@ int main(int argc, char *argv[])
 
             } else {
                 printf("User not logged in.\n");
+            }
+        }
+
+        else if (strcmp(command, "publish") == 0) {
+
+            if (fields != 3) {
+                printf("Usage: publish <filename> <label>\n");
+                continue;
+            }
+
+            if (!logged_in) {
+                printf("User not logged in.\n");
+                continue;
+            }
+
+            if (!validar_Filename(arg1)) {
+                printf("Invalid filename (max 24 chars, format name.xxx).\n");
+                continue;
+            }
+
+            if (!validar_Label(arg2)) {
+                printf("Invalid label (1-20 chars: letters, digits, - and _).\n");
+                continue;
+            }
+
+            cmd_result_t result = publish_file(sockfd,
+                                                &server_addr,
+                                                current_uid,
+                                                current_password,
+                                                arg1,
+                                                arg2);
+
+            if (result == CMD_NO_SESSION) {
+                logged_in = 0;
+                current_uid[0] = '\0';
+                current_password[0] = '\0';
+
+            } else if (result == CMD_COMM_ERROR) {
+                printf("Communication error during publish.\n");
+            }
+        }
+
+        else if (strcmp(command, "remove") == 0) {
+
+            if (fields != 2) {
+                printf("Usage: remove <filename>\n");
+                continue;
+            }
+
+            if (!logged_in) {
+                printf("User not logged in.\n");
+                continue;
+            }
+
+            if (!validar_Filename(arg1)) {
+                printf("Invalid filename (max 24 chars, format name.xxx).\n");
+                continue;
+            }
+
+            cmd_result_t result = remove_file(sockfd,
+                                               &server_addr,
+                                               current_uid,
+                                               current_password,
+                                               arg1);
+
+            if (result == CMD_NO_SESSION) {
+                logged_in = 0;
+                current_uid[0] = '\0';
+                current_password[0] = '\0';
+
+            } else if (result == CMD_COMM_ERROR) {
+                printf("Communication error during remove.\n");
+            }
+        }
+
+        else if (strcmp(command, "list") == 0) {
+
+            if (fields != 1) {
+                printf("Usage: list\n");
+                continue;
+            }
+
+            /* Não requer login */
+            cmd_result_t result = list_files(sockfd, &server_addr);
+
+            if (result == CMD_COMM_ERROR) {
+                printf("Communication error during list.\n");
             }
         }
 

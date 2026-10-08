@@ -10,4 +10,11 @@ int validar_Password(const char *Password);
 /* Valida um número de porto: inteiro entre 1 e 65535. */
 int validar_Port(int Port);
 
+/* Valida um filename: "base.ext" com no máximo 24 caracteres no total.
+ * base: letras, dígitos, '-' e '_'. ext: exatamente 3 alfanuméricos. */
+int validar_Filename(const char *Filename);
+
+/* Valida uma label: 1 a 20 caracteres (letras, dígitos, '-' e '_'). */
+int validar_Label(const char *Label);
+
 #endif /* VALIDATION_H */

@@ -7,7 +7,6 @@
 
 volatile sig_atomic_t got_sigint = 0;
 
-/* O handler só levanta a flag: printf, close, etc. não são seguros aqui */
 static void sigint_handler(int sig)
 {
     (void)sig;
