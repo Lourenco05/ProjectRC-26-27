@@ -9,9 +9,14 @@
 
 #include "ds_tcp.h"
 #include "common.h"
-#include "parse.h"
 #include "signals.h"
 #include "validation.h"
+
+/* Limites usados só pelo comando versions (TCP) */
+#define TCP_TIMEOUT_SEC         5          /* connect / read / write */
+#define VRS_MAX_RESP            (1 << 20)  /* limite de 1 MiB para a resposta RVR */
+#define VERSIONS_TIME_SIZE      48         /* buffer da publication_time (1 ou 2 tokens) */
+#define VERSIONS_TIME_TOKEN_MAX 20         /* tamanho máximo de cada token da data */
 
 
 /* Uma linha da resposta RVR: UID Fsize label publication_time availability */
@@ -297,7 +302,7 @@ cmd_result_t versions_file(struct sockaddr_in *server_addr,
         return CMD_REJECTED;
     }
 
-    /* Separar a resposta em tokens (alocar o máximo possível: nº de espaços + 1) */
+    /* Contar o máximo de tokens possível (nº de espaços + 1) para alocar o vetor */
     reply[strlen(reply) - 1] = '\0';                /* retirar o '\n' */
 
     for (const char *c = reply; *c != '\0'; c++) {
@@ -313,11 +318,11 @@ cmd_result_t versions_file(struct sockaddr_in *server_addr,
         return CMD_COMM_ERROR;
     }
 
-    ntok = split_tokens(reply, tok, ntok_max);
-
-    if (ntok < 0) {
-        printf("Malformed message received from DS.\n");
-        goto done;
+    /* Partir a resposta em tokens separados por espaços */
+    ntok = 0;
+    char *save = NULL;
+    for (char *t = strtok_r(reply, " ", &save); t != NULL; t = strtok_r(NULL, " ", &save)) {
+        tok[ntok++] = t;
     }
 
     if (ntok == 1 && strcmp(tok[0], "ERR") == 0) {

@@ -97,7 +97,7 @@ int main(int argc, char *argv[])
 
     /* Timeout no recvfrom, para não bloquear se o DS não responder */
     struct timeval tv;
-    tv.tv_sec = UDP_TIMEOUT_SEC;
+    tv.tv_sec = 3;
     tv.tv_usec = 0;
 
     if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
