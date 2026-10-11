@@ -18,18 +18,18 @@
 #define VERSIONS_TIME_TOKEN_MAX 20         /* tamanho máximo de cada token da data */
 
 
-/* Uma linha da resposta RVR: UID Fsize label publication_time availability */
 typedef struct {
     char uid[UID_LEN + 1];
-    char fsize[9];                        
+    char fsize[9];
     char label[LABEL_MAX_LEN + 1];
-    char time[VERSIONS_TIME_SIZE];          
-    int  available;                         
+    char time[VERSIONS_TIME_SIZE];          /* a data pode vir em 1 ou 2 tokens */
+    int  available;                         /* 1 = AVL, 0 = NAV */
 } version_entry_t;
 
 
 
-/* Confirmar que write() escreve tudo */
+/* O write() pode escrever menos bytes do que pedimos, por isso repete-se
+ * até estar tudo enviado. */
 static int write_all(int fd, const char *buf, size_t len)
 {
     size_t sent = 0;
@@ -39,6 +39,8 @@ static int write_all(int fd, const char *buf, size_t len)
 
         if (n < 0) {
             if (errno == EINTR) {
+                /* interrompido por um sinal: se foi o Ctrl+C desiste,
+                 * senão tenta outra vez */
                 if (sigint_received()) {
                     return -1;
                 }
@@ -61,6 +63,8 @@ static int write_all(int fd, const char *buf, size_t len)
     return 0;
 }
 
+/* Lê a resposta do DS até ao '\n'. A resposta pode vir em vários bocados, por
+ * isso lê-se em ciclo e o buffer vai crescendo (até VRS_MAX_RESP).*/
 static int read_reply(int fd, char **out)
 {
     size_t cap = 1024;
@@ -73,6 +77,7 @@ static int read_reply(int fd, char **out)
     }
 
     for (;;) {
+        /* sem espaço para mais um read: duplicar o buffer (com limite) */
         if (len + 1 >= cap) {
             if (cap >= VRS_MAX_RESP) {
                 free(buf);
@@ -98,6 +103,7 @@ static int read_reply(int fd, char **out)
                 }
                 continue;
             }
+            /* o timeout do SO_RCVTIMEO aparece como EAGAIN */
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 printf("No response from server (timeout).\n");
             } else {
@@ -132,6 +138,7 @@ static int read_reply(int fd, char **out)
 
 
 
+/* AVL -> 1, NAV -> 0, qualquer outra coisa -> -1 */
 static int availability_of(const char *token)
 {
     if (strcmp(token, "AVL") == 0) return 1;
@@ -155,6 +162,8 @@ static int valid_time_token(const char *token)
 }
 
 
+/* Passa os tokens da resposta (a partir do 2, depois de "RVR OK") para um
+ * vetor de version_entry_t. Devolve 0 em caso de sucesso, -1 se a resposta estiver mal formada. */
 static int parse_entries(char *tok[], int ntok,
                          version_entry_t **entries, int *count)
 {
@@ -206,7 +215,7 @@ static int parse_entries(char *tok[], int ntok,
         list[n].available = avail;
 
         n++;
-        i += 3 + time_tokens + 1;
+        i += 3 + time_tokens + 1;       /* uid, fsize, label + data + AVL/NAV */
     }
 
     *entries = list;
@@ -218,6 +227,8 @@ malformed:
     return -1;
 }
 
+/* Comando versions: liga por TCP ao DS, envia "VRS filename\n", lê a resposta
+ * "RVR ..." e mostra a lista de versões. */
 cmd_result_t versions_file(struct sockaddr_in *server_addr,
                             const char *filename)
 {
@@ -249,6 +260,7 @@ cmd_result_t versions_file(struct sockaddr_in *server_addr,
         return CMD_COMM_ERROR;
     }
 
+    /* O SO_SNDTIMEO também limita o tempo do connect */
     if (connect(fd, (struct sockaddr *)server_addr, sizeof(*server_addr)) < 0) {
         if (errno == EINPROGRESS || errno == EAGAIN || errno == ETIMEDOUT) {
             printf("Could not connect to DS (timeout).\n");
@@ -267,7 +279,7 @@ cmd_result_t versions_file(struct sockaddr_in *server_addr,
     }
 
     rc = read_reply(fd, &reply);
-    close(fd);
+    close(fd);                                      /* já não é precisa a ligação */
 
     if (rc == -1) {
         return CMD_COMM_ERROR;
@@ -279,6 +291,7 @@ cmd_result_t versions_file(struct sockaddr_in *server_addr,
 
     reply[strlen(reply) - 1] = '\0';                /* retirar o '\n' */
 
+    /* nº máximo de tokens = nº de espaços + 1, para alocar o vetor */
     for (const char *c = reply; *c != '\0'; c++) {
         if (*c == ' ') {
             ntok_max++;
@@ -298,6 +311,8 @@ cmd_result_t versions_file(struct sockaddr_in *server_addr,
     for (char *t = strtok_r(reply, " ", &save); t != NULL; t = strtok_r(NULL, " ", &save)) {
         tok[ntok++] = t;
     }
+
+    /* A partir daqui é usado "goto done" para libertar sempre a memória */
 
     if (ntok == 1 && strcmp(tok[0], "ERR") == 0) {
         printf("Versions request error.\n");
@@ -333,7 +348,7 @@ cmd_result_t versions_file(struct sockaddr_in *server_addr,
         goto done;
     }
 
-    if (ntok == 2) {                                
+    if (ntok == 2) {                                /* "RVR OK" sem nenhuma entrada */
         printf("No versions of '%s' are currently available.\n", filename);
         result = CMD_OK;
         goto done;
@@ -344,6 +359,7 @@ cmd_result_t versions_file(struct sockaddr_in *server_addr,
         goto done;
     }
 
+    /* Só chega aqui com todas as entradas validadas */
     printf("Versions of '%s' (%d found):\n", filename, count);
     printf("  %-6s  %9s  %-*s  %-19s  %s\n",
            "UID", "SIZE (B)", LABEL_MAX_LEN, "LABEL", "PUBLISHED", "STATUS");
