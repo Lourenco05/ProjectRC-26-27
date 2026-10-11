@@ -100,3 +100,23 @@ int validar_Label(const char *Label)
 
     return 1;
 }
+
+
+int validar_Fsize(const char *Fsize)
+{
+    size_t n = strlen(Fsize);
+    long long value = 0;
+
+    if (n < 1 || n > 8) {
+        return 0;
+    }
+
+    for (size_t i = 0; i < n; i++) {
+        if (!isdigit((unsigned char)Fsize[i])) {
+            return 0;
+        }
+        value = value * 10 + (Fsize[i] - '0');
+    }
+
+    return value <= MAX_FSIZE;
+}

@@ -8,14 +8,19 @@ typedef enum {
     CMD_OK,          /* sucesso confirmado pelo DS */
     CMD_NO_SESSION,  /* DS confirma que não há sessão ativa */
     CMD_REJECTED,    /* pedido recusado por outro motivo (WRP, ERR, resposta inesperada) */
-    CMD_COMM_ERROR   /* falha de comunicação (timeout, sendto/recvfrom) */
+    CMD_COMM_ERROR   /* falha de comunicação (timeout, sendto/recvfrom, connect, ...) */
 } cmd_result_t;
 
-/* Envia msg ao DS através de sockfd e aguarda a resposta.
- * Devolve 0 em caso de sucesso, -1 em caso de erro de comunicação.*/
+/* Envia msg ao DS através de sockfd (UDP) e aguarda a resposta.
+ *  - Reenvia o pedido até UDP_MAX_ATTEMPTS vezes se não houver resposta.
+ *  - Ignora datagramas que não venham do DS ou que não sejam do tipo esperado
+ *    (expected_tag, por exemplo "RLI"; "ERR\n" é sempre aceite), evitando
+ *    confundir respostas atrasadas de pedidos anteriores com a resposta atual.
+ * Devolve 0 em caso de sucesso, -1 em caso de erro de comunicação. */
 int communicate(int sockfd,
                 struct sockaddr_in *server_addr,
                 const char *msg,
+                const char *expected_tag,
                 char *response,
                 size_t resp_len);
 
@@ -38,8 +43,8 @@ cmd_result_t unregister_user(int sockfd,
                               const char *uid,
                               const char *password);
 
-/* Verifica localmente que o ficheiro existe, envia um pedido PUB ao DS
- * e interpreta a resposta RPB. */
+/* Verifica localmente que o ficheiro existe e é legível, envia um pedido PUB
+ * ao DS e interpreta a resposta RPB. */
 cmd_result_t publish_file(int sockfd,
                            struct sockaddr_in *server_addr,
                            const char *uid,

@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>                      
+#include <errno.h>
+#include <stdint.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -14,7 +15,56 @@
 #include "args.h"
 #include "validation.h"
 #include "ds_protocol.h"
-#include "signals.h"                    
+#include "ds_tcp.h"
+#include "signals.h"
+
+/* Resultados de read_command_line() */
+#define READ_OK        1
+#define READ_END       0     /* EOF (Ctrl+D) ou Ctrl+C */
+#define READ_TOO_LONG -1     /* linha maior que o buffer (já descartada) */
+#define READ_RETRY    -2     /* interrompido por um sinal sem importância */
+
+/* Termina a sessão local (depois de logout/unregister bem sucedidos ou de
+ * o DS indicar que não há sessão). */
+static void clear_session(int *logged_in, char *uid, char *password)
+{
+    *logged_in = 0;
+    uid[0] = '\0';
+    password[0] = '\0';
+}
+
+/* Lê uma linha do teclado para buf, já sem o '\n'.
+ * Se a linha não couber no buffer, o resto é descartado, para não ser
+ * interpretado como um comando seguinte. */
+static int read_command_line(char *buf, size_t size)
+{
+    errno = 0;
+
+    if (fgets(buf, (int)size, stdin) == NULL) {
+        if (errno == EINTR && !sigint_received()) {
+            clearerr(stdin);
+            return READ_RETRY;
+        }
+        return READ_END;
+    }
+
+    size_t len = strlen(buf);
+
+    if (len > 0 && buf[len - 1] == '\n') {
+        buf[len - 1] = '\0';
+        return READ_OK;
+    }
+
+    if (feof(stdin)) {                  /* última linha sem '\n' */
+        return READ_OK;
+    }
+
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF) {
+        /* descartar o resto da linha */
+    }
+    return READ_TOO_LONG;
+}
 
 int main(int argc, char *argv[])
 {
@@ -36,7 +86,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    setup_signals();                    
+    setup_signals();
 
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
 
@@ -47,7 +97,7 @@ int main(int argc, char *argv[])
 
     /* Timeout no recvfrom, para não bloquear se o DS não responder */
     struct timeval tv;
-    tv.tv_sec = 3;
+    tv.tv_sec = UDP_TIMEOUT_SEC;
     tv.tv_usec = 0;
 
     if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
@@ -59,10 +109,10 @@ int main(int argc, char *argv[])
     struct sockaddr_in server_addr;
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(dsport);
+    server_addr.sin_port = htons((uint16_t)dsport);
 
     if (inet_pton(AF_INET, dsip, &server_addr.sin_addr) <= 0) {
-        printf("Error: Invalid IP adress.\n");
+        printf("Error: Invalid IP address.\n");
         close(sockfd);
         return 1;
     }
@@ -72,37 +122,21 @@ int main(int argc, char *argv[])
     char current_password[20] = "";
     char buffer[INPUT_BUF_SIZE];
 
-    while (!sigint_received()) {               
+    while (!sigint_received()) {
 
         printf("> ");
         fflush(stdout);
 
-        if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
-            if (sigint_received()) {
-                break;
-            }
-            if (errno == EINTR) {
-                clearerr(stdin);
-                continue;
-            }
+        int rl = read_command_line(buffer, sizeof(buffer));
+
+        if (rl == READ_END) {
             break;
         }
-
-        /* Remover '\n' */
-        buffer[strcspn(buffer, "\n")] = '\0';
-
-        if (strlen(buffer) == 0) {
+        if (rl == READ_RETRY) {
             continue;
         }
-
-        if (strcmp(buffer, "exit") == 0) {
-
-            if (logged_in) {
-                printf("Please logout before exiting.\n");
-            } else {
-                break;
-            }
-
+        if (rl == READ_TOO_LONG) {
+            printf("Input line too long.\n");
             continue;
         }
 
@@ -125,7 +159,26 @@ int main(int argc, char *argv[])
                         arg2,
                         extra);
 
-        if (strcmp(command, "login") == 0) {
+        if (fields <= 0) {          /* linha vazia ou só com espaços */
+            continue;
+        }
+
+        if (strcmp(command, "exit") == 0) {
+
+            if (fields != 1) {
+                printf("Usage: exit\n");
+                continue;
+            }
+
+            if (logged_in) {
+                printf("Please logout before exiting.\n");
+                continue;
+            }
+
+            break;
+        }
+
+        else if (strcmp(command, "login") == 0) {
 
             if (fields != 3) {
                 printf("Usage: login <UID> <Password>\n");
@@ -173,9 +226,7 @@ int main(int argc, char *argv[])
                                               current_password);
 
                 if (result == CMD_OK || result == CMD_NO_SESSION) {
-                    logged_in = 0;
-                    current_uid[0] = '\0';
-                    current_password[0] = '\0';
+                    clear_session(&logged_in, current_uid, current_password);
 
                 } else if (result == CMD_COMM_ERROR) {
                     printf("Communication error during logout.\n");
@@ -200,9 +251,7 @@ int main(int argc, char *argv[])
                                                         current_password);
 
                 if (result == CMD_OK || result == CMD_NO_SESSION) {
-                    logged_in = 0;
-                    current_uid[0] = '\0';
-                    current_password[0] = '\0';
+                    clear_session(&logged_in, current_uid, current_password);
 
                 } else if (result == CMD_COMM_ERROR) {
                     printf("Communication error during unregister.\n");
@@ -243,9 +292,7 @@ int main(int argc, char *argv[])
                                                 arg2);
 
             if (result == CMD_NO_SESSION) {
-                logged_in = 0;
-                current_uid[0] = '\0';
-                current_password[0] = '\0';
+                clear_session(&logged_in, current_uid, current_password);
 
             } else if (result == CMD_COMM_ERROR) {
                 printf("Communication error during publish.\n");
@@ -276,9 +323,7 @@ int main(int argc, char *argv[])
                                                arg1);
 
             if (result == CMD_NO_SESSION) {
-                logged_in = 0;
-                current_uid[0] = '\0';
-                current_password[0] = '\0';
+                clear_session(&logged_in, current_uid, current_password);
 
             } else if (result == CMD_COMM_ERROR) {
                 printf("Communication error during remove.\n");
@@ -297,6 +342,26 @@ int main(int argc, char *argv[])
 
             if (result == CMD_COMM_ERROR) {
                 printf("Communication error during list.\n");
+            }
+        }
+
+        else if (strcmp(command, "versions") == 0) {
+
+            if (fields != 2) {
+                printf("Usage: versions <filename>\n");
+                continue;
+            }
+
+            if (!validar_Filename(arg1)) {
+                printf("Invalid filename (max 24 chars, format name.xxx).\n");
+                continue;
+            }
+
+            /* O pedido VRS não leva UID, por isso não requer login */
+            cmd_result_t result = versions_file(&server_addr, arg1);
+
+            if (result == CMD_COMM_ERROR) {
+                printf("Communication error during versions.\n");
             }
         }
 

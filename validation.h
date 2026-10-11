@@ -17,4 +17,7 @@ int validar_Filename(const char *Filename);
 /* Valida uma label: 1 a 20 caracteres (letras, dígitos, '-' e '_'). */
 int validar_Label(const char *Label);
 
+/* Valida um Fsize recebido como texto: 1 a 8 dígitos, valor <= 10 000 000. */
+int validar_Fsize(const char *Fsize);
+
 #endif /* VALIDATION_H */

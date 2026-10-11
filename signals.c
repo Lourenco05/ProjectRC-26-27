@@ -5,7 +5,7 @@
 
 #include "signals.h"
 
-volatile sig_atomic_t got_sigint = 0;
+static volatile sig_atomic_t got_sigint = 0;
 
 static void sigint_handler(int sig)
 {
