@@ -10,8 +10,7 @@ static void print_usage(void)
     printf("Usage: ./user -m peerport [-n DSIP] [-p DSport]\n");
 }
 
-/* Converte um porto em texto. Devolve 1..65535 ou -1 se o texto não for
- * inteiramente um número decimal válido nesse intervalo. */
+/* Converte uma port em texto */
 static int parse_port(const char *text)
 {
     char *end = NULL;

@@ -18,14 +18,12 @@
 #include "ds_tcp.h"
 #include "signals.h"
 
-/* Resultados de read_command_line() */
 #define READ_OK        1
 #define READ_END       0     /* EOF (Ctrl+D) ou Ctrl+C */
 #define READ_TOO_LONG -1     /* linha maior que o buffer (já descartada) */
 #define READ_RETRY    -2     /* interrompido por um sinal sem importância */
 
-/* Termina a sessão local (depois de logout/unregister bem sucedidos ou de
- * o DS indicar que não há sessão). */
+/* Termina a sessão local */
 static void clear_session(int *logged_in, char *uid, char *password)
 {
     *logged_in = 0;
@@ -33,9 +31,6 @@ static void clear_session(int *logged_in, char *uid, char *password)
     password[0] = '\0';
 }
 
-/* Lê uma linha do teclado para buf, já sem o '\n'.
- * Se a linha não couber no buffer, o resto é descartado, para não ser
- * interpretado como um comando seguinte. */
 static int read_command_line(char *buf, size_t size)
 {
     errno = 0;
@@ -337,7 +332,6 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-            /* Não requer login */
             cmd_result_t result = list_files(sockfd, &server_addr);
 
             if (result == CMD_COMM_ERROR) {
@@ -357,7 +351,6 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-            /* O pedido VRS não leva UID, por isso não requer login */
             cmd_result_t result = versions_file(&server_addr, arg1);
 
             if (result == CMD_COMM_ERROR) {

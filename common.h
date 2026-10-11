@@ -1,8 +1,7 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-/* Valores por omissão do Directory Server, usados quando -n / -p
- * não são indicados na linha de comandos. */
+/* Valores por omissão do Directory Server */
 #define DEFAULT_DSIP   "193.136.138.142"
 #define DEFAULT_DSPORT 59000
 

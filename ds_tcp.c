@@ -12,7 +12,6 @@
 #include "signals.h"
 #include "validation.h"
 
-/* Limites usados só pelo comando versions (TCP) */
 #define TCP_TIMEOUT_SEC         5          /* connect / read / write */
 #define VRS_MAX_RESP            (1 << 20)  /* limite de 1 MiB para a resposta RVR */
 #define VERSIONS_TIME_SIZE      48         /* buffer da publication_time (1 ou 2 tokens) */
@@ -22,18 +21,15 @@
 /* Uma linha da resposta RVR: UID Fsize label publication_time availability */
 typedef struct {
     char uid[UID_LEN + 1];
-    char fsize[9];                          /* até 8 dígitos */
+    char fsize[9];                        
     char label[LABEL_MAX_LEN + 1];
-    char time[VERSIONS_TIME_SIZE];          /* publication_time (1 ou 2 tokens) */
-    int  available;                         /* 1 = AVL, 0 = NAV */
+    char time[VERSIONS_TIME_SIZE];          
+    int  available;                         
 } version_entry_t;
 
 
-/* ------------------------------------------------------------------ */
-/* Funções auxiliares de I/O                                           */
-/* ------------------------------------------------------------------ */
 
-/* write() pode escrever menos bytes do que pedido: repetir até acabar. */
+/* Confirmar que write() escreve tudo */
 static int write_all(int fd, const char *buf, size_t len)
 {
     size_t sent = 0;
@@ -65,12 +61,6 @@ static int write_all(int fd, const char *buf, size_t len)
     return 0;
 }
 
-/* Lê do socket até encontrar '\n' (a resposta pode chegar em vários
- * read()). Devolve em *out um buffer malloc'ed com a linha (incluindo o
- * '\n', terminada em '\0').
- * Devolve 0 em sucesso, -1 em erro de comunicação (timeout, erro de read) e
- * -2 se a resposta for inválida (fecho da ligação antes do '\n', resposta
- * maior que VRS_MAX_RESP, bytes depois do '\n' ou caracteres NUL). */
 static int read_reply(int fd, char **out)
 {
     size_t cap = 1024;
@@ -141,11 +131,7 @@ static int read_reply(int fd, char **out)
 }
 
 
-/* ------------------------------------------------------------------ */
-/* Parsing da resposta RVR                                             */
-/* ------------------------------------------------------------------ */
 
-/* 1 se for "AVL", 0 se for "NAV", -1 caso contrário */
 static int availability_of(const char *token)
 {
     if (strcmp(token, "AVL") == 0) return 1;
@@ -153,7 +139,6 @@ static int availability_of(const char *token)
     return -1;
 }
 
-/* Um token de data/hora: 1 a VERSIONS_TIME_TOKEN_MAX caracteres imprimíveis */
 static int valid_time_token(const char *token)
 {
     size_t n = strlen(token);
@@ -169,12 +154,7 @@ static int valid_time_token(const char *token)
     return 1;
 }
 
-/* Converte os tokens a partir do índice 2 em entradas. Cada entrada tem
- *   UID Fsize label publication_time availability
- * em que publication_time tem 1 token (ex.: 2026-10-10T12:00:00) ou 2 tokens
- * (ex.: "2026-10-10 12:00:00"): o fim da data é sempre marcado por AVL/NAV.
- * Devolve 0 e preenche *entries (malloc) / *count, ou -1 se qualquer entrada
- * for inválida (nesse caso nada é devolvido). */
+
 static int parse_entries(char *tok[], int ntok,
                          version_entry_t **entries, int *count)
 {
@@ -238,11 +218,6 @@ malformed:
     return -1;
 }
 
-
-/* ------------------------------------------------------------------ */
-/* Comando versions                                                    */
-/* ------------------------------------------------------------------ */
-
 cmd_result_t versions_file(struct sockaddr_in *server_addr,
                             const char *filename)
 {
@@ -302,7 +277,6 @@ cmd_result_t versions_file(struct sockaddr_in *server_addr,
         return CMD_REJECTED;
     }
 
-    /* Contar o máximo de tokens possível (nº de espaços + 1) para alocar o vetor */
     reply[strlen(reply) - 1] = '\0';                /* retirar o '\n' */
 
     for (const char *c = reply; *c != '\0'; c++) {
@@ -359,7 +333,7 @@ cmd_result_t versions_file(struct sockaddr_in *server_addr,
         goto done;
     }
 
-    if (ntok == 2) {                                /* "RVR OK" sem entradas */
+    if (ntok == 2) {                                
         printf("No versions of '%s' are currently available.\n", filename);
         result = CMD_OK;
         goto done;

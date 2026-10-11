@@ -310,7 +310,6 @@ cmd_result_t list_files(int sockfd, struct sockaddr_in *server_addr)
     if (communicate(sockfd, server_addr, "LST\n", response, sizeof(response)) == -1)
         return CMD_COMM_ERROR;
  
-    /* A mensagem tem de terminar em '\n' */
     size_t len = strlen(response);
     if (len == 0 || response[len - 1] != '\n') {
         printf("Malformed message received from DS.\n");
@@ -318,13 +317,13 @@ cmd_result_t list_files(int sockfd, struct sockaddr_in *server_addr)
     }
     response[len - 1] = '\0';
  
-    /* Prefixo "RLS " */
     if (strncmp(response, "RLS ", 4) != 0) {
         printf("Unexpected message received from DS.\n");
         return CMD_REJECTED;
     }
- 
-    char *p = response + 4;         /* ponteiro de leitura, depois de "RLS " */
+    
+    /* ponteiro de leitura */
+    char *p = response + 4;         
     int consumed = 0;
     char status[10];
  
@@ -349,8 +348,6 @@ cmd_result_t list_files(int sockfd, struct sockaddr_in *server_addr)
         return CMD_REJECTED;
     }
  
-    /* Ler todos os filenames para um array antes de mostrar nada, para não
-     * imprimir uma lista parcial se a mensagem estiver mal formada. */
     char names[MAX_LIST_ENTRIES][LIST_TOKEN_SIZE];
     char name[LIST_TOKEN_SIZE];
     int count = 0;
