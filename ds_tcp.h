@@ -3,7 +3,7 @@
 
 #include <netinet/in.h>
 
-#include "ds_protocol.h"     /* cmd_result_t */
+#include "ds_udp.h"     /* cmd_result_t */
 
 /* Mostra a lista de versões disponiveis do ficheiro "filename" através de uma ligação TCP */
 cmd_result_t versions_file(struct sockaddr_in *server_addr,

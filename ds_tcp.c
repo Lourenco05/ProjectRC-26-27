@@ -39,8 +39,6 @@ static int write_all(int fd, const char *buf, size_t len)
 
         if (n < 0) {
             if (errno == EINTR) {
-                /* interrompido por um sinal: se foi o Ctrl+C desiste,
-                 * senão tenta outra vez */
                 if (sigint_received()) {
                     return -1;
                 }
@@ -51,9 +49,6 @@ static int write_all(int fd, const char *buf, size_t len)
             } else {
                 perror("write");
             }
-            return -1;
-        }
-        if (n == 0) {
             return -1;
         }
 
@@ -164,8 +159,7 @@ static int valid_time_token(const char *token)
 
 /* Passa os tokens da resposta (a partir do 2, depois de "RVR OK") para um
  * vetor de version_entry_t. Devolve 0 em caso de sucesso, -1 se a resposta estiver mal formada. */
-static int parse_entries(char *tok[], int ntok,
-                         version_entry_t **entries, int *count)
+static int parse_entries(char *tok[], int ntok, version_entry_t **entries, int *count)
 {
     int max_entries = (ntok - 2) / 5 + 1;           /* mínimo de 5 tokens por entrada */
     version_entry_t *list = calloc((size_t)max_entries, sizeof(*list));
@@ -348,7 +342,8 @@ cmd_result_t versions_file(struct sockaddr_in *server_addr,
         goto done;
     }
 
-    if (ntok == 2) {                                /* "RVR OK" sem nenhuma entrada */
+    /* "RVR OK" sem nenhuma entrada */
+    if (ntok == 2) {                                
         printf("No versions of '%s' are currently available.\n", filename);
         result = CMD_OK;
         goto done;
@@ -359,7 +354,6 @@ cmd_result_t versions_file(struct sockaddr_in *server_addr,
         goto done;
     }
 
-    /* Só chega aqui com todas as entradas validadas */
     printf("Versions of '%s' (%d found):\n", filename, count);
     printf("  %-6s  %9s  %-*s  %-19s  %s\n",
            "UID", "SIZE (B)", LABEL_MAX_LEN, "LABEL", "PUBLISHED", "STATUS");

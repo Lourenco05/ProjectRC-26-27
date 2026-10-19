@@ -14,7 +14,7 @@
 #include "common.h"
 #include "args.h"
 #include "validation.h"
-#include "ds_protocol.h"
+#include "ds_udp.h"
 #include "ds_tcp.h"
 #include "signals.h"
 

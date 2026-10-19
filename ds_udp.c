@@ -5,7 +5,7 @@
 #include <sys/stat.h>
 #include <sys/socket.h>
 
-#include "ds_protocol.h"
+#include "ds_udp.h"
 #include "common.h"
 
 int communicate(int sockfd,

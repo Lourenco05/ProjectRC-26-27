@@ -6,7 +6,7 @@ CFLAGS = -Wall -Wextra -std=gnu99
 DEPFLAGS = -MMD -MP
 
 TARGET = user
-SRCS = signals.c user.c args.c validation.c ds_protocol.c ds_tcp.c
+SRCS = signals.c user.c args.c validation.c ds_udp.c ds_tcp.c
 OBJS = $(SRCS:.c=.o)
 DEPS = $(SRCS:.c=.d)
 
