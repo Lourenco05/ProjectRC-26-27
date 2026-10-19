@@ -156,6 +156,10 @@ static int valid_time_token(const char *token)
     return 1;
 }
 
+static int memory_clean(void *ptr){
+    free(ptr);
+    return -1;
+}
 
 /* Passa os tokens da resposta (a partir do 2, depois de "RVR OK") para um
  * vetor de version_entry_t. Devolve 0 em caso de sucesso, -1 se a resposta estiver mal formada. */
@@ -176,14 +180,14 @@ static int parse_entries(char *tok[], int ntok, version_entry_t **entries, int *
         int avail;
 
         if (i + 4 >= ntok || n >= max_entries) {
-            goto malformed;
+            return memory_clean(list);
         }
 
         if (!validar_UID(tok[i]) ||
             !validar_Fsize(tok[i + 1]) ||
             !validar_Label(tok[i + 2]) ||
             !valid_time_token(tok[i + 3])) {
-            goto malformed;
+            return memory_clean(list);
         }
 
         if ((avail = availability_of(tok[i + 4])) != -1) {
@@ -193,7 +197,7 @@ static int parse_entries(char *tok[], int ntok, version_entry_t **entries, int *
                    (avail = availability_of(tok[i + 5])) != -1) {
             time_tokens = 2;
         } else {
-            goto malformed;
+            return memory_clean(list);
         }
 
         snprintf(list[n].uid, sizeof(list[n].uid), "%s", tok[i]);
@@ -214,11 +218,14 @@ static int parse_entries(char *tok[], int ntok, version_entry_t **entries, int *
 
     *entries = list;
     *count = n;
-    return 0;
+    return 0;    
+}
 
-malformed:
-    free(list);
-    return -1;
+static cmd_result_t finish_versions(version_entry_t *entries, char **tok, char *reply, cmd_result_t result) {
+    free(entries);
+    free(tok);
+    free(reply);
+    return result;
 }
 
 /* Comando versions: liga por TCP ao DS, envia "VRS filename\n", lê a resposta
@@ -226,7 +233,6 @@ malformed:
 cmd_result_t versions_file(struct sockaddr_in *server_addr,
                             const char *filename)
 {
-    cmd_result_t result = CMD_REJECTED;
     char message[MSG_BUF_SIZE];
     char *reply = NULL;
     char **tok = NULL;
@@ -306,26 +312,26 @@ cmd_result_t versions_file(struct sockaddr_in *server_addr,
         tok[ntok++] = t;
     }
 
-    /* A partir daqui é usado "goto done" para libertar sempre a memória */
+    /* A partir daqui usamos a função finish_versions para limpar memória e sair */
 
     if (ntok == 1 && strcmp(tok[0], "ERR") == 0) {
         printf("Versions request error.\n");
-        goto done;
+        return finish_versions(entries, tok, reply, CMD_REJECTED);
     }
 
     if (ntok < 2 || strcmp(tok[0], "RVR") != 0) {
         printf("Unexpected message received from DS.\n");
-        goto done;
+        return finish_versions(entries, tok, reply, CMD_REJECTED);
     }
 
     if (strcmp(tok[1], "NOK") == 0) {
         if (ntok != 2) {
             printf("Malformed message received from DS.\n");
+            return finish_versions(entries, tok, reply, CMD_REJECTED);
         } else {
             printf("No versions of '%s' are currently available.\n", filename);
-            result = CMD_OK;
+            return finish_versions(entries, tok, reply, CMD_OK);
         }
-        goto done;
     }
 
     if (strcmp(tok[1], "ERR") == 0) {
@@ -334,24 +340,23 @@ cmd_result_t versions_file(struct sockaddr_in *server_addr,
         } else {
             printf("Versions request error.\n");
         }
-        goto done;
+        return finish_versions(entries, tok, reply, CMD_REJECTED);
     }
 
     if (strcmp(tok[1], "OK") != 0) {
         printf("Unexpected versions response.\n");
-        goto done;
+        return finish_versions(entries, tok, reply, CMD_REJECTED);
     }
 
     /* "RVR OK" sem nenhuma entrada */
     if (ntok == 2) {                                
         printf("No versions of '%s' are currently available.\n", filename);
-        result = CMD_OK;
-        goto done;
+        return finish_versions(entries, tok, reply, CMD_OK);
     }
 
     if (parse_entries(tok, ntok, &entries, &count) == -1) {
         printf("Malformed message received from DS.\n");
-        goto done;
+        return finish_versions(entries, tok, reply, CMD_REJECTED);
     }
 
     printf("Versions of '%s' (%d found):\n", filename, count);
@@ -367,11 +372,6 @@ cmd_result_t versions_file(struct sockaddr_in *server_addr,
                entries[i].available ? "available" : "not available");
     }
 
-    result = CMD_OK;
-
-done:
-    free(entries);
-    free(tok);
-    free(reply);
-    return result;
+    /* Sucesso final */
+    return finish_versions(entries, tok, reply, CMD_OK);
 }
