@@ -10,7 +10,7 @@ static void print_usage(void)
     printf("Usage: ./user -m peerport [-n DSIP] [-p DSport]\n");
 }
 
-/* Converte uma port em texto */
+/* Converte uma port em inteiro */
 static int parse_port(const char *text)
 {
     char *end = NULL;

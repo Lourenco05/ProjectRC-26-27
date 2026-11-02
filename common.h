@@ -9,10 +9,12 @@
 #define UID_LEN      6
 #define PASSWORD_LEN 8
 
+/* Buffers para o I/O*/
 #define MSG_BUF_SIZE      128
 #define RESPONSE_BUF_SIZE 256
 #define INPUT_BUF_SIZE    256
 
+/* Buffers para a comunicação com o Servidor*/
 #define FILENAME_MAX_LEN  24            
 #define FILENAME_EXT_LEN  3             
 #define LABEL_MAX_LEN     20           

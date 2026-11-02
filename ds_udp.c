@@ -39,6 +39,9 @@ int communicate(int sockfd,
                                    (struct sockaddr *)&sender_addr,
                                    &addr_len);
 
+    /*Otimização: Verificar se a resposta vem do DS*/
+
+
     if (bytes_recvd < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             printf("No response from server (timeout).\n");
@@ -205,7 +208,7 @@ cmd_result_t publish_file(int sockfd,
     }
 
     if ((long long)st.st_size > MAX_FSIZE) {
-        printf("File too large (maximum is %lld bytes).\n", MAX_FSIZE);
+        printf("File too large (maximum is %lld MB).\n", MAX_FSIZE / 1000000);
         return CMD_REJECTED;
     }
 
