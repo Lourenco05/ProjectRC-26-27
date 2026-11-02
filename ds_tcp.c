@@ -12,7 +12,7 @@
 #include "signals.h"
 #include "validation.h"
 
-#define TCP_TIMEOUT_SEC         5          /* connect / read / write */
+#define TCP_TIMEOUT_SEC         3          /* connect / read / write */
 #define VRS_MAX_RESP            (1 << 20)  /* limite de 1 MiB para a resposta RVR */
 #define VERSIONS_TIME_SIZE      48         /* buffer da publication_time (1 ou 2 tokens) */
 #define VERSIONS_TIME_TOKEN_MAX 20         /* tamanho máximo de cada token da data */
@@ -46,6 +46,8 @@ static int write_all(int fd, const char *buf, size_t len)
             }
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 printf("Timeout sending request to DS.\n");
+            } else if (errno == ECONNRESET || errno == EPIPE) {
+                printf("Connection closed by DS.\n");
             } else {
                 perror("write");
             }
@@ -262,6 +264,10 @@ cmd_result_t versions_file(struct sockaddr_in *server_addr,
 
     /* O SO_SNDTIMEO também limita o tempo do connect */
     if (connect(fd, (struct sockaddr *)server_addr, sizeof(*server_addr)) < 0) {
+        if (errno == EINTR) {
+            close(fd);
+            return CMD_COMM_ERROR;
+        }
         if (errno == EINPROGRESS || errno == EAGAIN || errno == ETIMEDOUT) {
             printf("Could not connect to DS (timeout).\n");
         } else {

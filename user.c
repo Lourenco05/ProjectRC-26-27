@@ -1,13 +1,10 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <stdint.h>
 
-#include <sys/types.h>
+#include <netdb.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <arpa/inet.h>
 #include <unistd.h>
 #include <sys/time.h>
 
@@ -101,16 +98,23 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    struct sockaddr_in server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons((uint16_t)dsport);
+    struct addrinfo hints, *res;
+    char portstr[8];
 
-    if (inet_pton(AF_INET, dsip, &server_addr.sin_addr) <= 0) {
-        printf("Error: Invalid IP address.\n");
+    snprintf(portstr, sizeof(portstr), "%d", dsport);
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family   = AF_INET;       
+    hints.ai_socktype = SOCK_DGRAM;     
+    int err = getaddrinfo(dsip, portstr, &hints, &res);
+    if (err != 0) {
+        printf("Error: %s\n", gai_strerror(err));
         close(sockfd);
         return 1;
     }
+    struct sockaddr_in server_addr;
+    memcpy(&server_addr, res->ai_addr, sizeof(server_addr));
+    freeaddrinfo(res);
 
     int logged_in = 0;
     char current_uid[20] = "";
